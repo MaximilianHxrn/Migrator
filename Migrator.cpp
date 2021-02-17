@@ -120,9 +120,6 @@ void processFolder(string folder)
                 }
                 processFile(temp.c_str());
             }
-            else {
-                processFolder(string(fd.cFileName));
-            }
         } while (::FindNextFileA(hFind, &fd));
         ::FindClose(hFind);
     }
