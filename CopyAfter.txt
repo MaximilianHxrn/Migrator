@@ -1,0 +1,174 @@
+local procedure AddField(SourceTableID: Integer; SourceFieldID: Integer; TargetTableID: Integer; TargetFieldID: Integer)
+    var
+        DataMigSetup: Record "SIT Data Migration Setup";
+    begin
+        CheckValueNonZero(SourceTableID, 'SourceTableID');
+        CheckValueNonZero(SourceFieldID, 'SourceFieldID');
+        CheckValueNonZero(TargetTableID, 'TargetTableID');
+        CheckValueNonZero(TargetFieldID, 'TargetFieldID');
+        with DataMigSetup do begin
+            Init();
+            Validate("SIT From Table-ID", SourceTableID);
+            Validate("SIT From Field-ID", SourceFieldID);
+            Validate("SIT To Table-ID", TargetTableID);
+            Validate("SIT To Field-ID", TargetFieldID);
+            Validate("SIT Level", 1);
+            Insert(true);
+        end;
+    end;
+
+    local procedure CheckValueNonZero(ValueToCheck: Integer; ValueReferece: Text)
+    var
+        ValueMustNotBeZeroErr: Label '%1 must not be zero.';
+    begin
+        if ValueToCheck = 0 then
+            Error(ValueMustNotBeZeroErr, ValueReferece);
+    end;
+
+    procedure DropRecords(RequestConfirmation: Boolean)
+    var
+        DataMigSetup: Record "SIT Data Migration Setup";
+        Confirmed: Boolean;
+        DropAllRecordsQst: Label 'All Setup-Entries  will be deleted.\Do you want to continue?';
+    begin
+        Confirmed := not RequestConfirmation;
+        with DataMigSetup do begin
+            Reset();
+            if not IsEmpty() then begin
+                if RequestConfirmation then
+                    Confirmed := Confirm(DropAllRecordsQst, true);
+                if Confirmed then
+                    DeleteAll(true);
+            end;
+        end;
+    end;
+
+    procedure VerifyFields(var DataMigSetup: Record "SIT Data Migration Setup")
+    var
+        FieldTbl: Record Field;
+        FieldTbl2: Record Field;
+        FieldClassMustBeNormalMsg: Label 'Field %1: Field Class is %2';
+        FieldMustBeEnabledMsg: Label 'Field %1 is not enabled';
+        FieldPropertyDifferentMsg: Label 'Property "%1" differs';
+    begin
+        with DataMigSetup do begin
+            if (not "SIT Valid") or
+               ("SIT From Field-ID" = 0) or
+               ("SIT To Field-ID" = 0)
+            then
+                exit;
+            FieldTbl.Get("SIT From Table-ID", "SIT From Field-ID");
+            FieldTbl2.Get("SIT To Table-ID", "SIT To Field-ID");
+
+            if FieldTbl.Class <> FieldTbl.Class::Normal then begin
+                AppendNote(StrSubstNo(FieldClassMustBeNormalMsg, FieldTbl."No.", FieldTbl.Class));
+                Validate("SIT Valid", false);
+            end;
+            if FieldTbl2.Class <> FieldTbl2.Class::Normal then begin
+                AppendNote(StrSubstNo(FieldClassMustBeNormalMsg, FieldTbl2."No.", FieldTbl2.Class));
+                Validate("SIT Valid", false);
+            end;
+            if not FieldTbl.Enabled then begin
+                AppendNote(StrSubstNo(FieldMustBeEnabledMsg, FieldTbl."No."));
+                Validate("SIT Valid", false);
+            end;
+            if not FieldTbl2.Enabled then begin
+                AppendNote(StrSubstNo(FieldMustBeEnabledMsg, FieldTbl2."No."));
+                Validate("SIT Valid", false);
+            end;
+
+            if FieldTbl.Type <> FieldTbl2.Type then begin
+                AppendNote(StrSubstNo(FieldPropertyDifferentMsg, FieldTbl.FieldCaption(Type)));
+                Validate("SIT Valid", false);
+            end;
+
+            if FieldTbl.Len > FieldTbl2.len then begin
+                AppendNote(StrSubstNo(FieldPropertyDifferentMsg, FieldTbl.FieldCaption(Len)));
+                Validate("SIT Valid", false);
+            end;
+        end;
+    end;
+
+    procedure Transfer()
+    var
+        DataMigSetup: Record "SIT Data Migration Setup";
+        DataMigSetupBuffer: Record "SIT Data Migration Setup" temporary;
+        RecRefSource: RecordRef;
+        RecRefTarget: RecordRef;
+        RecRefDB: RecordRef;
+        FRefSource: FieldRef;
+        FRefTarget: FieldRef;
+        Window: Dialog;
+        StartTransferQst: Label 'Existing Data will be overwritten.\Do you want to start the transfer?';
+        ProgressTxt: Label 'Transferring Data ...\\#1##############################';
+        TableInfoTxt: Label 'Table %1 --> Table %2';
+    begin
+        DataMigSetup.Reset();
+        if DataMigSetup.IsEmpty() then
+            exit;
+        if not Confirm(StartTransferQst, true) then
+            exit;
+
+        BuildDataMigSetupBuffer(DataMigSetupBuffer);
+        DataMigSetupBuffer.FindSet();
+        Window.Open(ProgressTxt);
+        repeat
+            Window.Update(1, StrSubstNo(TableInfoTxt, DataMigSetupBuffer."SIT From Table-ID", DataMigSetupBuffer."SIT To Table-ID"));
+            RecRefSource.Open(DataMigSetupBuffer."SIT From Table-ID");
+            if not RecRefSource.IsEmpty() then
+                with DataMigSetup do begin
+                    RecRefSource.FindSet();
+                    repeat
+                        if DataMigSetupBuffer."SIT From Table-ID" = DataMigSetupBuffer."SIT To Table-ID" then
+                            RecRefTarget := RecRefSource.Duplicate()
+                        else
+                            RecRefTarget.Open(DataMigSetupBuffer."SIT To Table-ID");
+
+                        Reset();
+                        SetRange("SIT From Table-ID", DataMigSetupBuffer."SIT From Table-ID");
+                        SetRange("SIT To Table-ID", DataMigSetupBuffer."SIT To Table-ID");
+                        SetFilter("SIT From Field-ID", '<>%1', 0);
+                        SetFilter("SIT To Field-ID", '<>%1', 0);
+                        SetRange("SIT Valid", true);
+                        FindSet();
+                        repeat
+                            FRefSource := RecRefSource.Field("SIT From Field-ID");
+                            FRefTarget := RecRefTarget.Field("SIT To Field-ID");
+                            FRefTarget.Value := FRefSource.Value();
+                        until Next() = 0;
+
+                        RecRefDB := RecRefTarget.Duplicate();
+                        RecRefDB.SetRecFilter();
+                        if RecRefDB.IsEmpty() then
+                            RecRefTarget.Insert()
+                        else
+                            RecRefTarget.Modify();
+                        RecRefDB.Close();
+                        RecRefTarget.Close();
+                    until RecRefSource.Next() = 0;
+                end;
+            RecRefSource.Close();
+        until DataMigSetupBuffer.Next() = 0;
+        Window.Close();
+    end;
+
+    local procedure BuildDataMigSetupBuffer(var DataMigSetupBuffer: Record "SIT Data Migration Setup" temporary)
+    var
+        DataMigSetup: Record "SIT Data Migration Setup";
+    begin
+        DataMigSetupBuffer.Reset();
+        if not DataMigSetupBuffer.IsEmpty() then
+            DataMigSetupBuffer.DeleteAll();
+        with DataMigSetup do begin
+            Reset();
+            SetRange("SIT Valid", true);
+            FindSet();
+            repeat
+                if not DataMigSetupBuffer.Get("SIT From Table-ID", "SIT To Table-ID", 0, 0) then begin
+                    DataMigSetupBuffer."SIT From Table-ID" := "SIT From Table-ID";
+                    DataMigSetupBuffer."SIT To Table-ID" := "SIT To Table-ID";
+                    DataMigSetupBuffer.Insert();
+                end;
+            until Next() = 0;
+        end;
+    end;

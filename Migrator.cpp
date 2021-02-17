@@ -125,6 +125,24 @@ void processFolder(string folder)
     }
 }
 
+void CopyAfter() {
+    string line;
+    ifstream myfile("CopyAfter.txt");
+    if (myfile.is_open())
+    {
+        while (myfile.good())
+        {
+            getline(myfile, line);
+            write << line << endl;
+        }
+        myfile.close();
+    }
+    else
+    {
+        printf("%s is not open.", "CopyAfter.txt");
+    }
+}
+
 int main(int argc, char const *argv[])
 {
     string s(argv[1]);
@@ -134,7 +152,9 @@ int main(int argc, char const *argv[])
     auto t1 = std::chrono::high_resolution_clock::now();
     processFolder(s);
     auto t2 = std::chrono::high_resolution_clock::now();
-    write << "end;\n}" << endl;
+    write << "end;" << endl;
+    CopyAfter();
+    write << "\n}";
     write.close();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count();
     if (duration == 0)
