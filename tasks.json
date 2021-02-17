@@ -6,7 +6,7 @@
         {
             "label": "Create Data Migration Codeunit",
             "type": "shell",
-            "command": "powershell.exe -File C:\\Users\\Shabib\\Desktop\\Repository\\Migrator\\Migrate-Tables.ps1 -WorkingDirectory C:\\Users\\Shabib\\Desktop\\Repository\\Migrator",
+            "command": "powershell.exe -File \\\\sitsrv061\\WinFrame\\Transfer\\cir.al\\StandaloneDevTools\\Migrator\\Migrate-Tables.ps1 -WorkingDirectory \\\\sitsrv061\\WinFrame\\Transfer\\cir.al\\StandaloneDevTools\\Migrator",
             "problemMatcher": []
         }
     ]
