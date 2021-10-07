@@ -6,9 +6,6 @@
     $foldername.SelectedPath = $initialDirectory
     if ($foldername.ShowDialog() -eq "OK") {
         $folder += $foldername.SelectedPath
-        Set-Location "C:\\Users\\Shabib\\Desktop\\Repository\\Migrator"
+        Set-Location "\\sitsrv061\WinFrame\Transfer\cir.al\StandaloneDevTools\Migrator"
         .\Migrator.exe $folder
-    }
-    else {
-        .\Migrate-Tables.ps1
     }
